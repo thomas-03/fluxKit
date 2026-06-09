@@ -25,6 +25,63 @@ def fit_blackbody(freqs,luminosities):
     fit_temp, fit_cov = scipy.optimize.curve_fit(blackbody,freqs,luminosities,p0=1e5)
     return fit_temp[0]
 
+def plot_spec_ratio(image, ax=None, labels=None, plot_blackbody=False, temperature=None,area=None, MC_spec=None, MC_spec_args={}, MC_labels=None,freq_units='eV',lum_units='erg'):
+    if not isinstance(image, list):
+        image = [image]
+    
+    if labels is not None and not isinstance(labels, list):
+        raise TypeError("labels must be a list of strings, not a single string")
+    
+    if labels is not None and len(labels) != len(image):
+        raise ValueError(f"labels must have same length as image list ({len(labels)} != {len(image)})")
+    
+    #establish Hz as the normal frequency baseline and just apply a frequency_unit throughout
+    if freq_units == 'eV':
+        frequency_unit = Units.h_ev
+        ax.set_xlabel('eV')
+    else:
+        frequency_unit = 1
+        ax.set_xlabel('Hz')
+    #establish erg as the normal energy baseline and just apply a lum_unit throughout
+    if lum_units == 'eV':
+        lum_unit = 1/Units.eV_2_erg
+        ax.set_label('eV')
+    else:
+        lum_unit =1
+        ax.set_label('erg')
+
+    for i in range(len(image)):
+        frequencies = image[i].frequencies
+        L = image[i].get_luminosity()
+        if (ax is None) and i==0:
+             ax = plt.gca()
+
+    if plot_blackbody:
+        if temperature is None:
+            temperature = fit_blackbody(frequencies,L)
+        bb_freq = np.logspace(np.log10(min(frequencies)), np.log10(max(frequencies)), 100)
+        bb_flux = blackbody(bb_freq, temperature)
+    
+        ax.plot(bb_freq*frequency_unit, (L*frequencies*lum_unit)/bb_flux*bb_freq*lum_unit*area, label='Blacklight/Blackbody (T={0:.2e} K)'.format(temperature))
+    
+
+    if MC_spec ==None and len(MC_spec_args)==5:
+        MC_spec = MCSpec(MC_spec_args['directory'],MC_spec_args['nproc'],nfreq=MC_spec_args['nfreq'],emin=MC_spec_args['emin'],emax=MC_spec_args['emax'])
+    elif MC_spec ==None and len(MC_spec_args)==2:
+            MC_spec = MCSpec(MC_spec_args['directory'],MC_spec_args['nproc'])
+    if MC_spec != None:
+        if not isinstance(MC_spec, list):
+            MC_spec = [MC_spec]
+        raise UserWarning('correct handling of frequencies for ratio not done yet')
+        for i in range(len(MC_spec)):
+            ax.errorbar(MC_spec[i].freq*frequency_unit*1e3/Units.h_ev,(L*frequencies*lum_unit)/MC_spec[i].lum*lum_unit,yerr=MC_spec[i].lum_err, label=MC_labels[i] if MC_labels is not None else 'Blacklight/MC Spectrum {0}'.format(i),marker='s')
+            
+            
+    ax.legend()
+    ax.set_xlabel('$\\nu$ ['+freq_units+']')
+    return ax
+
+
 
 def plot_spectra(image, ax=None, labels=None, plot_blackbody=False, temperature=None,area=None, MC_spec=None, MC_spec_args={}, MC_labels=None,freq_units='eV',lum_units='erg'):
     '''Plot the spectra from one or multiple Image objects. Optionally also plot a blackbody spectrum and/or Monte Carlo spectra with error bars.
@@ -73,7 +130,7 @@ def plot_spectra(image, ax=None, labels=None, plot_blackbody=False, temperature=
              ax = plt.gca()
 
             
-        ax.plot(frequencies*frequency_unit, L*frequencies*lum_unit, label=labels[i] if labels is not None else 'Blacklight Spectrum {0}'.format(i))
+        ax.plot(frequencies*frequency_unit, L*frequencies*lum_unit, label=labels[i] if labels is not None else 'Blacklight Spectrum {0}'.format(i),marker='.',markersize=4)
         
     
     if plot_blackbody:
@@ -93,7 +150,7 @@ def plot_spectra(image, ax=None, labels=None, plot_blackbody=False, temperature=
             MC_spec = [MC_spec]
 
         for i in range(len(MC_spec)):
-            ax.errorbar(MC_spec[i].freq*frequency_unit*1e3/Units.h_ev, MC_spec[i].lum*lum_unit,yerr=MC_spec[i].lum_err, label=MC_labels[i] if MC_labels is not None else 'MC Spectrum {0}'.format(i))
+            ax.errorbar(MC_spec[i].freq*frequency_unit, MC_spec[i].lum*lum_unit,yerr=MC_spec[i].lum_err, label=MC_labels[i] if MC_labels is not None else 'MC Spectrum {0}'.format(i),marker='s',markersize=4)
             
             
     ax.legend()
@@ -232,7 +289,7 @@ def plot_image(image,image_name,freq=0,ax=None,axes='rg',logc=False,cmin=None,cm
     ax.set_ylabel(y_label)
 
     #TO DO: add implementation to include proper title
-    
+    ax.set_title("Intensity at "+str(image.frequencies[freq]*Units.h_ev).format("0.2e")+" eV")
     return colorpic
 
 

@@ -1559,7 +1559,9 @@ def make_image_mc(phots, rcam, ninc, imin, imax, nen, emin, emax,
     #set ebins temporarily to 0
     everg = 1.6021772e-12
     xphots = phots.energy/everg/1000.
+    print("Photon min energy and max energy in keV:", np.min(xphots), np.max(xphots))
     ebins = get_bins(xphots, efaces, nen, True, True)
+    #print(ebins)
     #ebins = np.zeros(len(ibins),dtype=int)
 
     # Create intensity grid and loop over photons to add contribution
