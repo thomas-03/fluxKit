@@ -33,6 +33,12 @@ class Image:
         except KeyError:
             self.polarization = False
         
+        try:
+            self.file['sigma_I']
+            self.error = True
+        except KeyError:
+            self.error = False
+        
 
         self.adaptive_num_levels = self.file['adaptive_num_levels'][0]
         
@@ -77,13 +83,21 @@ class Image:
                 q_nu = self.file['Q_nu'][:]
                 u_nu = self.file['U_nu'][:]
                 v_nu = self.file['V_nu'][:]
-                self.image[0] = np.vstack((i_nu[None,:,:], q_nu[None,:,:], u_nu[None,:,:], v_nu[None,:,:]))
+                if self.error:
+                    sigma_I = self.file['sigma_I'][:]
+                else:
+                    sigma_I = np.zeros(i_nu.shape)*np.nan
+                self.image[0] = np.vstack((i_nu[None,:,:], q_nu[None,:,:], u_nu[None,:,:], v_nu[None,:,:],sigma_I[None,:,:]))
         else:
                 i_nu = self.file['I_nu'][:]
                 q_nu = np.zeros(i_nu.shape)*np.nan
                 u_nu = np.zeros(i_nu.shape)*np.nan
                 v_nu = np.zeros(i_nu.shape)*np.nan
-                self.image[0] = np.vstack((i_nu[None,:,:], q_nu[None,:,:], u_nu[None,:,:], v_nu[None,:,:]))
+                if self.error:
+                    sigma_I = self.file['sigma_I'][:]
+                else:
+                    sigma_I = np.zeros(i_nu.shape)*np.nan
+                self.image[0] = np.vstack((i_nu[None,:,:], q_nu[None,:,:], u_nu[None,:,:], v_nu[None,:,:],sigma_I[None,:,:]))
                 #print("in this loop",self.image[0])
         
                 
@@ -132,6 +146,19 @@ class Image:
             return I
         else:
             raise RuntimeError('No polarization data in file.')
+    
+    def get_sigmaI(self,level=0):
+        image = self.load_image()
+        if self.error:
+            I = {}
+            I[0] = self.image[0][4,:,:,:]
+            for level in range(1,level+1):
+                I[level] = self.image[level][4,:,:,:]
+            return I
+        else:
+            I = {}
+            I[0] = np.zeros(np.array(self.get_I(level)[0]).shape)
+            return I
     
     def get_Alternate_Image(self, image_name, level=0):
         '''Get an alternate image (eg. optical depth)'''
@@ -277,16 +304,21 @@ class Image:
 
         else:
             image = self.get_I()[0]
+            error = self.get_sigmaI()[0]
             image_width = 2 * np.arctan(0.5 * self.width_rg / self.distance)
 
             flux = np.array([])
+            flux_err = np.array([])
 
             for freq in range(len(self.frequencies)):
                 tempImage = np.copy(image[freq, :, :])
-
+                tempImageErr = np.copy(error[freq, :, :])
+                
                 flux = np.append(flux,np.nanmean(tempImage[np.isfinite(tempImage)]) * image_width ** 2)
+                #print(np.sqrt(np.nansum(tempImageErr[np.isfinite(tempImageErr)]**2)) * (image_width ** 2)/np.shape(tempImageErr[np.isfinite(tempImageErr)])[0],np.nanmean(tempImageErr[np.isfinite(tempImageErr)]**2)* (image_width ** 2))
+                flux_err = np.append(flux_err,np.sqrt(np.nansum(tempImageErr[np.isfinite(tempImageErr)]**2)) * (image_width ** 2)/np.shape(tempImageErr[np.isfinite(tempImageErr)])[0])
 
-        return flux
+        return flux,flux_err
 
     def get_luminosity(self):
         '''Calculate the luminosity from the flux and distance.
@@ -296,10 +328,10 @@ class Image:
         Outputs:
         - luminosity in erg/s/Hz
         '''
-        flux = self.get_flux()
+        flux,flux_err = self.get_flux()
         rg = self.gg_msun * self.mass_msun / (self.c ** 2)
         luminosity = 2*((rg*self.distance)**2)*flux
-        return luminosity
+        return luminosity,2*((rg*self.distance)**2)*flux_err
 
 
         

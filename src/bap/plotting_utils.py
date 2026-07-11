@@ -125,12 +125,15 @@ def plot_spectra(image, ax=None, labels=None, plot_blackbody=False, temperature=
 
     for i in range(len(image)):
         frequencies = image[i].frequencies
-        L = image[i].get_luminosity()
+        L,L_err = image[i].get_luminosity()
         if (ax is None) and i==0:
              ax = plt.gca()
-
-            
-        ax.plot(frequencies*frequency_unit, L*frequencies*lum_unit, label=labels[i] if labels is not None else 'Blacklight Spectrum {0}'.format(i),marker='.',markersize=4)
+        print(L*frequencies*lum_unit,L_err*frequencies*lum_unit)
+        #print(frequencies[L_err==0.0]*frequency_unit)
+        if(np.count_nonzero(L_err)>0):
+            ax.errorbar(frequencies*frequency_unit, L*frequencies*lum_unit,yerr=L_err*frequencies*lum_unit, label=labels[i] if labels is not None else 'Blacklight {0}'.format(i),marker='.',markersize=4)
+        else:
+            ax.plot(frequencies*frequency_unit, L*frequencies*lum_unit, label=labels[i] if labels is not None else 'Blacklight {0}'.format(i),marker='.',markersize=4)
         
     
     if plot_blackbody:
@@ -148,9 +151,13 @@ def plot_spectra(image, ax=None, labels=None, plot_blackbody=False, temperature=
     if MC_spec != None:
         if not isinstance(MC_spec, list):
             MC_spec = [MC_spec]
-
+        
         for i in range(len(MC_spec)):
-            ax.errorbar(MC_spec[i].freq*frequency_unit, MC_spec[i].lum*lum_unit,yerr=MC_spec[i].lum_err, label=MC_labels[i] if MC_labels is not None else 'MC Spectrum {0}'.format(i),marker='s',markersize=4)
+            for j in range(len(MC_spec[i].lum)):
+                if MC_spec[i].mu[j] !="sum":
+                    ax.errorbar(MC_spec[i].freq*frequency_unit, MC_spec[i].lum[j]*lum_unit,yerr=MC_spec[i].lum_err[j]*lum_unit, label=MC_labels[i] if MC_labels is not None else  f"MC i={np.arccos((MC_spec[i].mu[j]+0.5)/MC_spec[i].nmu)*180./np.pi:.2f}$ ^\\circ$",marker='s',markersize=4)
+                else:
+                    ax.errorbar(MC_spec[i].freq*frequency_unit, MC_spec[i].lum[j]*lum_unit,yerr=MC_spec[i].lum_err[j]*lum_unit, label=MC_labels[i] if MC_labels is not None else  f"MC $\\sum_i$ ",marker='s',markersize=4)
             
             
     ax.legend()
@@ -158,7 +165,7 @@ def plot_spectra(image, ax=None, labels=None, plot_blackbody=False, temperature=
     ax.set_ylabel('$\\nu L_\\nu$ ['+lum_units+'$/s$]')
     return ax
 
-def plot_manyIncs_spectra(blacklight_path,base_input_file,base_output_name,ninc, ax=None, plot_blackbody=False, temperature=None, MC_spec=None, MC_spec_args={}, MC_labels=None,freq_units='eV',lum_units='erg'):
+def plot_manyIncs_spectra(blacklight_path,base_input_file,base_output_name,ninc, ax=None, plot_blackbody=False, temperature=None, MC_spec=None, MC_spec_args={}, MC_labels=None,freq_units='eV',lum_units='erg',overwrite=False):
     outfiles = run_multiple_jobs.run_mult_inclinations(blacklight_path,base_input_file,base_output_name,ninc)
     labels = ["i= "+str(o[-9:-3]) for o in outfiles]
     images = [Image(o) for o in outfiles]
@@ -174,7 +181,7 @@ def plot_manytimes_spectra(outfiles, outputFig, plot_blackbody=False, temperatur
     plt.xscale('log')
     plt.savefig(outputFig)
 
-def plot_image(image,image_name,freq=0,ax=None,axes='rg',logc=False,cmin=None,cmax=None,level=0):
+def plot_image(image,image_name,freq=0,ax=None,axes='rg',logc=False,cmin=None,cmax=None,level=0,title=None):
     
     if axes == 'rg' or (axes is None and image.mass_msun is None):
         half_width = 0.5 * image.width_rg
@@ -267,9 +274,9 @@ def plot_image(image,image_name,freq=0,ax=None,axes='rg',logc=False,cmin=None,cm
         ax = plt.gca()
     
     if logc:
-        colorpic =ax.imshow(zeroPic,extent=extent,norm=colors.LogNorm(vmin=cmin,vmax=cmax),origin='lower')
+        colorpic =ax.imshow(zeroPic,extent=extent,norm=colors.LogNorm(vmin=cmin,vmax=cmax),origin='lower',cmap='inferno')
     else:
-        colorpic =ax.imshow(zeroPic,extent=extent,origin='lower')
+        colorpic =ax.imshow(zeroPic,extent=extent,origin='lower',cmap='inferno')
 
     # Plot adaptive image
     for l in range(1, level + 1):
@@ -289,7 +296,10 @@ def plot_image(image,image_name,freq=0,ax=None,axes='rg',logc=False,cmin=None,cm
     ax.set_ylabel(y_label)
 
     #TO DO: add implementation to include proper title
-    ax.set_title("Intensity at "+str(image.frequencies[freq]*Units.h_ev).format("0.2e")+" eV")
+    if title is not None:
+        ax.set_title(title)
+    else:
+        ax.set_title(f"$I_\\nu$ at {image.frequencies[freq]*Units.h_ev:.2e} eV")
     return colorpic
 
 

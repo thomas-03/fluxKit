@@ -3,12 +3,23 @@ import os
 import numpy as np
 
 
-def run_mult_inclinations(blacklight_path,base_input_file,base_output_name,ninc):
+def run_mult_inclinations(blacklight_path,base_input_file,base_output_name,ninc,overwrite=False):
     i = np.linspace(0.0,180,ninc)
     outputs = []
+    directory = base_output_name.split('/')[:-1]
+    directory = "/".join(directory)
+    directory += '/'
+    print(directory)
+
+    files = os.listdir(directory)
+    files = [f for f in files if os.path.isfile(directory+'/'+f)]
+    print(files)
+
     for j in range(ninc):
         output_name= base_output_name+"_i{:05.1f}.npz".format(i[j])
         outputs.append(output_name)
+        if output_name in files and not overwrite:
+            continue
         command = blacklight_path + " " + base_input_file + " --output_file="+output_name+" --camera_th={0}".format(i[j])
         os.system(command)
     return outputs
